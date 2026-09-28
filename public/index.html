@@ -69,7 +69,8 @@ header{grid-area:head;display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px
 .layer{position:absolute;inset:0;width:100%;height:100%;display:block}
 #rosary{padding:2%}
 .ray{transition:opacity .9s;mix-blend-mode:screen}
-#rayLabels{pointer-events:none;overflow:visible}
+#rayLabels,#painting{overflow:visible}
+#rayLabels{pointer-events:none}
 .ray-label{transition:opacity .9s}
 .ray-label text{font-family:var(--sans);font-weight:700;letter-spacing:.02em;paint-order:stroke;stroke:rgba(25,14,15,.85);stroke-width:6px;stroke-linejoin:round}
 .bead{cursor:pointer;transition:fill .35s;stroke:rgba(25,14,15,.55);stroke-width:1}
@@ -248,7 +249,7 @@ header{grid-area:head;display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px
 <script>
 "use strict";
 /* ===== Konfiguracja ===== */
-const APP_VERSION = "1.5.0";
+const APP_VERSION = "1.6.0";
 const CONFIG = {
   bgUrl: "img/jezu-milosierny.webp",   // obraz Jezusa Miłosiernego (zawsze w całości)
   bgSize: [482, 1051],                 // wymiary obrazu w pikselach
@@ -288,17 +289,9 @@ const SAC = [
   {n:"Małżeństwo i Kapłaństwo", c:"red"}, {n:"Spowiedź i Namaszczenie chorych", c:"red"}
 ];
 // promienie z Serca: kąt w stopniach (zgodnie z obrazem: czerwone w lewo w dół, blade w dół i w prawo);
-// napisy sakramentów leżą na promieniach i zaczynają się y0 px (obrazu) poniżej Serca, wielkość f px.
-// Białe (i Spowiedź, której promień szybko wychodzi z obrazu) od jednej wysokości; Małżeństwo niżej,
-// gdzie promienie są dalej od siebie
+// napisy sakramentów leżą na promieniach, wszystkie od jednej wysokości tuż pod różańcem (layoutRayLabels)
 const RAY_ANGLE = [7, -4, -15, 18, 28];
-const RAY_TEXT = [
-  {lines:["Chrzest"], y0:275, f:42},
-  {lines:["Bierzmowanie"], y0:275, f:42},
-  {lines:["Eucharystia"], y0:275, f:42},
-  {lines:["Małżeństwo i", "Kapłaństwo"], y0:505, f:32},
-  {lines:["Spowiedź i", "Namaszczenie", "chorych"], y0:275, f:34}
-];
+const RAY_LINES = [["Chrzest"], ["Bierzmowanie"], ["Eucharystia"], ["Małżeństwo i", "Kapłaństwo"], ["Spowiedź i", "Namaszczenie", "chorych"]];
 const DAY_PART = ["chwalebne","radosne","bolesne","chwalebne","swiatla","bolesne","radosne"];
 
 /* ===== Geometria różańca (układ 400×350) =====
@@ -341,9 +334,10 @@ const smallBead = (d,j) => "r"+(d*11 + j + 1);
 function buildKoronka(){
   const s = [];
   s.push({b:"cross", t:"Znak krzyża", x:P.znak, d:-1});
-  s.push({b:"cL0", t:"Ojcze nasz", x:P.ojcze, d:-1});
-  s.push({b:"c1", t:"Zdrowaś Maryjo", x:P.zdrowas, d:-1});
-  s.push({b:"c2", t:"Wierzę w Boga", x:P.wierze, d:-1});
+  // duży paciorek nad krzyżykiem pominięty; wstęp na trzech małych paciorkach
+  s.push({b:"c1", t:"Ojcze nasz", x:P.ojcze, d:-1});
+  s.push({b:"c2", t:"Zdrowaś Maryjo", x:P.zdrowas, d:-1});
+  s.push({b:"c3", t:"Wierzę w Boga", x:P.wierze, d:-1});
   for(let d=0; d<5; d++){
     s.push({b:ofBead(d), t:`Dziesiątek ${ORD_D[d]}`, x:P.przedwieczny, d, n:0});
     for(let j=0;j<10;j++) s.push({b:smallBead(d,j), t:`Dziesiątek ${ORD_D[d]}`, x:P.dlaJego, d, n:j+1});
@@ -418,10 +412,51 @@ function drawPainting(){
     el("path", {d:`M-2 0 L2 0 L18 ${L*.75} L-18 ${L*.75} Z`, fill:`url(#${grad})`}, g);
     // napis na osi promienia, czytany od lewej do prawej
     const lg = el("g", {class:"ray-label", id:"rayT"+i, transform:tr, opacity:0}, labels);
-    const flip = RAY_ANGLE[i] > 0, R = RAY_TEXT[i], n = R.lines.length, d = R.y0 / Math.cos(RAY_ANGLE[i]*Math.PI/180);
+    const flip = RAY_ANGLE[i] > 0;
     const t = el("text", {transform:`rotate(${flip ? -90 : 90})`, "text-anchor":flip ? "end" : "start", "dominant-baseline":"central",
-      "font-size":R.f, fill:sac.c==="white" ? "#ffffff" : "#ffe1e1"}, lg);
-    R.lines.forEach((line,k)=>{ el("tspan", {x:(flip ? -1 : 1)*d, y:(k-(n-1)/2)*1.05*R.f}, t).textContent = line; });
+      fill:sac.c==="white" ? "#ffffff" : "#ffe1e1"}, lg);
+    RAY_LINES[i].forEach(line => { el("tspan", {}, t).textContent = line; });
+  });
+}
+
+/* Napisy sakramentów: wspólna wysokość tuż pod dolnym czubkiem różańca (różaniec i obraz skalują się
+   niezależnie, więc liczone po każdej zmianie rozmiaru), jedna wielkość dobrana tak, by napisy
+   nie nachodziły na siebie i mieściły się na scenie */
+function layoutRayLabels(){
+  const P = $("painting"), R = $("rosary"), stage = $("stage");
+  const [W, H] = CONFIG.bgSize, [hx, hy] = CONFIG.heart;
+  const toImg = (sx, sy) => { const q = P.createSVGPoint(); q.x = sx; q.y = sy; return q.matrixTransform(P.getScreenCTM().inverse()); };
+  const q = R.createSVGPoint(); q.x = CX; q.y = BEADS.r27.y + 10;
+  const tipS = q.matrixTransform(R.getScreenCTM()), sr = stage.getBoundingClientRect();
+  if(!sr.width || !P.getScreenCTM()) return;
+  const below = toImg(tipS.x, tipS.y).y - hy + 14;                  // tuż pod różańcem (px obrazu pod Sercem)
+  const left = toImg(sr.left, 0).x + 6, right = toImg(sr.right, 0).x - 6, bottom = Math.min(H, toImg(0, sr.bottom).y) - 8;
+  const rad = a => a*Math.PI/180, texts = SAC.map((_,i)=>$("rayT"+i).querySelector("text"));
+  const longest = texts.map(t => { t.setAttribute("font-size", 100); return Math.max(...[...t.children].map(ts=>ts.getComputedTextLength()))/100; });
+  const fit = Y0 => {                                                // największa wspólna wielkość dla wysokości Y0
+    let F = 46;
+    texts.forEach((t,i)=>{
+      const th = rad(RAY_ANGLE[i]), d0 = Y0/Math.cos(th);
+      let dMax = (bottom - hy)/Math.cos(th);
+      if(th > 0) dMax = Math.min(dMax, (hx - left)/Math.sin(th)); else if(th < 0) dMax = Math.min(dMax, (right - hx)/Math.sin(-th));
+      F = Math.min(F, (dMax - d0)/longest[i]);
+    });
+    for(let i=0;i<5;i++) for(let j=0;j<5;j++){                      // sąsiednie promienie
+      const ai = RAY_ANGLE[i], aj = RAY_ANGLE[j]; if(aj <= ai || aj-ai > 12) continue;
+      const gap = Y0*(Math.tan(rad(aj)) - Math.tan(rad(ai)))*Math.cos(rad((ai+aj)/2));
+      F = Math.min(F, (gap - 8)/(1.05*(RAY_LINES[i].length + RAY_LINES[j].length)/2));
+    }
+    return F;
+  };
+  // pod różańcem, chyba że napisy byłyby tam nieczytelne (niski ekran w poziomie): wtedy wyżej, bliżej Serca
+  const scale = P.getScreenCTM().a, minF = 13/scale;
+  let Y0 = below, F = fit(below);
+  if(F < minF) for(let y = below - 10; y >= 200; y -= 10){ const f = fit(y); if(f > F){ F = f; Y0 = y; } if(f >= minF) break; }
+  F = Math.max(8, F);
+  texts.forEach((t,i)=>{
+    const flip = RAY_ANGLE[i] > 0, d = Y0/Math.cos(rad(RAY_ANGLE[i])), n = t.children.length;
+    t.setAttribute("font-size", F.toFixed(1));
+    [...t.children].forEach((ts,k)=>{ ts.setAttribute("x", (flip ? -1 : 1)*d); ts.setAttribute("y", (k-(n-1)/2)*1.05*F); });
   });
 }
 
@@ -783,7 +818,9 @@ window.addEventListener("orientationchange", () => { hideTip(); closeSheets(); }
 
 /* ===== Start ===== */
 setTheme(st.theme); $("selTheme").value = st.theme;
-drawPainting(); drawRosary();
+drawPainting(); drawRosary(); layoutRayLabels();
+new ResizeObserver(() => layoutRayLabels()).observe($("stage"));
+if(document.fonts) document.fonts.ready.then(layoutRayLabels);
 $("rRate").value = st.rate; $("rVol").value = st.vol;
 $("tVoice").checked = st.voice; $("bVoice").setAttribute("aria-pressed", st.voice);
 setCC(st.cc);
