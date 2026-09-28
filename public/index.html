@@ -69,8 +69,9 @@ header{grid-area:head;display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px
 .layer{position:absolute;inset:0;width:100%;height:100%;display:block}
 #rosary{padding:2%}
 .ray{transition:opacity .9s;mix-blend-mode:screen}
-.ray-label{transition:opacity .9s;pointer-events:none}
-.ray-label text{font-family:var(--sans);font-weight:700;font-size:20px;letter-spacing:.04em;paint-order:stroke;stroke:rgba(25,14,15,.8);stroke-width:4px;stroke-linejoin:round}
+#rayLabels{pointer-events:none}
+.ray-label{transition:opacity .9s}
+.ray-label text{font-family:var(--sans);font-weight:700;font-size:30px;letter-spacing:.03em;paint-order:stroke;stroke:rgba(25,14,15,.85);stroke-width:6px;stroke-linejoin:round}
 .bead{cursor:pointer;transition:fill .35s;stroke:rgba(25,14,15,.55);stroke-width:1}
 .bead-small{fill:url(#gPearl)}
 .bead-large,.bead-medal{fill:url(#gPearlL)}
@@ -195,6 +196,7 @@ header{grid-area:head;display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px
   <div class="stage" id="stage" data-tip="Przesuń palcem w lewo lub w prawo albo stuknij w paciorek, aby przejść dalej">
     <svg id="painting" class="layer" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
     <svg id="rosary" class="layer" viewBox="0 0 400 350" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Różaniec w kształcie serca na tle obrazu Jezusa Miłosiernego"></svg>
+    <svg id="rayLabels" class="layer" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
   </div>
 
   <section class="caption" id="caption" aria-live="polite">
@@ -246,7 +248,7 @@ header{grid-area:head;display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px
 <script>
 "use strict";
 /* ===== Konfiguracja ===== */
-const APP_VERSION = "1.3.0";
+const APP_VERSION = "1.4.0";
 const CONFIG = {
   bgUrl: "img/jezu-milosierny.webp",   // obraz Jezusa Miłosiernego (zawsze w całości)
   bgSize: [482, 1051],                 // wymiary obrazu w pikselach
@@ -284,6 +286,16 @@ const ORD_D = ["pierwszy","drugi","trzeci","czwarty","piąty"];
 const SAC = [
   {n:"Chrzest", c:"white"}, {n:"Bierzmowanie", c:"white"}, {n:"Eucharystia", c:"white"},
   {n:"Małżeństwo i Kapłaństwo", c:"red"}, {n:"Spowiedź i Namaszczenie chorych", c:"red"}
+];
+// promienie z Serca: kąt w stopniach (zgodnie z obrazem: czerwone w lewo w dół, blade w dół i w prawo),
+// napis sakramentu i odległość jego środka od Serca (px obrazu)
+const RAY_ANGLE = [7, -4, -15, 18, 28];
+const RAY_LABEL = [
+  {lines:["Chrzest"], d:250},
+  {lines:["Bierzmowanie"], d:470},
+  {lines:["Eucharystia"], d:260},
+  {lines:["Małżeństwo", "i Kapłaństwo"], d:590},
+  {lines:["Spowiedź i", "Namaszczenie chorych"], d:265}
 ];
 const DAY_PART = ["chwalebne","radosne","bolesne","chwalebne","swiatla","bolesne","radosne"];
 
@@ -330,7 +342,6 @@ function buildKoronka(){
   s.push({b:"cL0", t:"Ojcze nasz", x:P.ojcze, d:-1});
   s.push({b:"c1", t:"Zdrowaś Maryjo", x:P.zdrowas, d:-1});
   s.push({b:"c2", t:"Wierzę w Boga", x:P.wierze, d:-1});
-  s.push({b:"c3", t:"Akt ufności", x:P.okrwi, d:-1});
   for(let d=0; d<5; d++){
     s.push({b:ofBead(d), t:`Dziesiątek ${ORD_D[d]}`, x:P.przedwieczny, d, n:0});
     for(let j=0;j<10;j++) s.push({b:smallBead(d,j), t:`Dziesiątek ${ORD_D[d]}`, x:P.dlaJego, d, n:j+1});
@@ -393,24 +404,25 @@ function drawPainting(){
   </defs>
   <image href="${CONFIG.bgUrl}" x="0" y="0" width="${W}" height="${H}"/>
   <g id="rays"></g>
-  <circle id="core" cx="${hx}" cy="${hy}" r="34" fill="url(#gCore)" opacity="0" class="ray"/>
-  <g id="rayLabels"></g>`;
-  // kąty zgodne z obrazem: czerwone w lewo w dół, blade w dół i w prawo
-  const angles = [7, -4, -15, 18, 28], L = 820, rays = svg.querySelector("#rays"), labels = svg.querySelector("#rayLabels");
+  <circle id="core" cx="${hx}" cy="${hy}" r="34" fill="url(#gCore)" opacity="0" class="ray"/>`;
+  // napisy: osobna warstwa nad różańcem, w tych samych współrzędnych co obraz
+  const labels = $("rayLabels"); labels.setAttribute("viewBox", `0 0 ${W} ${H}`); labels.innerHTML = "";
+  const L = 820, rays = svg.querySelector("#rays");
   SAC.forEach((sac,i)=>{
-    const tr = `translate(${hx} ${hy}) rotate(${angles[i]})`;
+    const tr = `translate(${hx} ${hy}) rotate(${RAY_ANGLE[i]})`;
     const g = el("g", {class:"ray", id:"ray"+i, transform:tr, opacity:0}, rays);
     const grad = sac.c==="white" ? "gRayW" : "gRayR";
     el("path", {d:`M-4 0 L4 0 L48 ${L} L-48 ${L} Z`, fill:`url(#${grad})`, filter:"url(#fSoft)"}, g);
     el("path", {d:`M-2 0 L2 0 L18 ${L*.75} L-18 ${L*.75} Z`, fill:`url(#${grad})`}, g);
-    // napis wzdłuż promienia (poza mieszaniem "screen", żeby był czytelny); zawsze czytany od lewej do prawej
+    // napis na osi promienia, czytany od lewej do prawej; sąsiednie promienie mają napisy
+    // na przemian bliżej i dalej od Serca, żeby się nie nakładały
     const lg = el("g", {class:"ray-label", id:"rayT"+i, transform:tr, opacity:0}, labels);
-    // "Chrzest" biegnie wzdłuż łańcuszka, więc jego napis odsunięty w lewo od paciorków
-    const flip = angles[i] > 0, START = i===0 ? 190 : 150, SIDE = i===0 ? -20 : 0;
-    const t = el("text", {transform:`rotate(${flip ? -90 : 90})`, x:flip ? -START : START, y:SIDE,
-      "text-anchor":flip ? "end" : "start", "dominant-baseline":"central",
+    const flip = RAY_ANGLE[i] > 0, lines = RAY_LABEL[i].lines, n = lines.length;
+    const t = el("text", {transform:`rotate(${flip ? -90 : 90})`, "text-anchor":"middle", "dominant-baseline":"central",
       fill:sac.c==="white" ? "#ffffff" : "#ffe1e1"}, lg);
-    t.textContent = sac.n;
+    lines.forEach((line,k)=>{
+      el("tspan", {x:(flip ? -1 : 1)*RAY_LABEL[i].d, y:(k-(n-1)/2)*34}, t).textContent = line;
+    });
   });
 }
 
