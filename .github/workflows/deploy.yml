@@ -9,14 +9,34 @@ permissions:
   contents: read
   deployments: write
 
+env:
+  CF_PROJECT: ${{ vars.CF_PROJECT || 'milosierdzie' }}
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check Cloudflare secrets
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::Brak sekretów CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID (Settings → Secrets and variables → Actions)"
+            exit 1
+          fi
+      # Pierwsze wdrożenie: utwórz projekt Pages, jeśli jeszcze nie istnieje
+      - name: Create Pages project if missing
+        run: |
+          if npx -y wrangler@4 pages project list | grep -qw "$CF_PROJECT"; then
+            echo "Projekt $CF_PROJECT już istnieje"
+          else
+            npx -y wrangler@4 pages project create "$CF_PROJECT" --production-branch=main
+          fi
       - uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy public --project-name=${{ vars.CF_PROJECT || 'milosierdzie' }} --branch=${{ github.ref_name }} --commit-dirty=true
+          wranglerVersion: "4"
+          command: pages deploy public --project-name=${{ env.CF_PROJECT }} --branch=${{ github.ref_name }} --commit-dirty=true
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
