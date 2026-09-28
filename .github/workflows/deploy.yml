@@ -19,6 +19,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Wersja natywna: APK (Capacitor) -> public/download/milosierdzie.apk, pod przycisk „Pobierz aplikację natywną (APK)”.
+      # Błąd budowania APK nie blokuje wdrożenia strony i PWA.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: native/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build Android APK
+        continue-on-error: true
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: bash native/build-apk.sh
+      - name: Upload APK artifact
+        if: hashFiles('public/download/milosierdzie.apk') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: milosierdzie-apk
+          path: public/download/milosierdzie.apk
       - name: Check Cloudflare secrets
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then

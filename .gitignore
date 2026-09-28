@@ -2,3 +2,6 @@ node_modules/
 .wrangler/
 .DS_Store
 .env
+native/www/
+native/android/
+public/download/*.apk

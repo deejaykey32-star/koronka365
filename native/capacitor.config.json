@@ -1,0 +1,9 @@
+{
+  "appId": "pl.djk.milosierdzie",
+  "appName": "Ufam Tobie",
+  "webDir": "www",
+  "backgroundColor": "#1f1718",
+  "android": {
+    "backgroundColor": "#1f1718"
+  }
+}

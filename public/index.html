@@ -246,7 +246,7 @@ header{grid-area:head;display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px
 <script>
 "use strict";
 /* ===== Konfiguracja ===== */
-const APP_VERSION = "1.2.0";
+const APP_VERSION = "1.3.0";
 const CONFIG = {
   bgUrl: "img/jezu-milosierny.webp",   // obraz Jezusa Miłosiernego (zawsze w całości)
   bgSize: [482, 1051],                 // wymiary obrazu w pikselach
@@ -492,10 +492,18 @@ function render(){
   $("bNext").disabled = idx===steps.length-1;
 }
 
-/* ===== Lektor (Web Speech API) ===== */
+/* ===== Wersja natywna (APK, Capacitor): lektor i wygaszanie ekranu przez wtyczki Androida ===== */
+const Cap = window.Capacitor;
+const isNative = !!(Cap && Cap.isNativePlatform && Cap.isNativePlatform());
+const nativeTTS = isNative ? Cap.registerPlugin("TextToSpeech") : null;
+const keepAwake = isNative ? Cap.registerPlugin("KeepAwake") : null;
+
+/* ===== Lektor (Web Speech API; w APK natywny syntezator mowy) ===== */
 const synth = window.speechSynthesis || null;
+const canSpeak = !!(synth || nativeTTS);
 let voices = [];
 function loadVoices(){
+  if(nativeTTS && !synth){ const sel = $("selVoice"), o = document.createElement("option"); sel.innerHTML = ""; o.value = ""; o.textContent = "Głos systemowy Androida (polski)"; sel.appendChild(o); return; }
   if(!synth) return;
   voices = synth.getVoices().filter(v=>/^pl/i.test(v.lang));
   const sel = $("selVoice"); sel.innerHTML = "";
@@ -509,13 +517,26 @@ function speakable(s){
   if(s.ann) return s.x;
   return s.x;
 }
+let speakTok = 0;
 function speak(text, cb){
-  if(!synth){ cb && cb(); return; }
-  synth.cancel();
+  if(!canSpeak){ cb && cb(); return; }
   const parts = text.split(/(?<=[.!?,;])\s+/).reduce((acc, p)=>{ const l = acc[acc.length-1]; if(l && (l.length+p.length) < 140) acc[acc.length-1] = l+" "+p; else acc.push(p); return acc; }, []);
   let finished = false;
   const done = () => { if(finished) return; finished = true; clearTimeout(guard); cb && cb(); };
   const guard = setTimeout(done, estimate(text)*2.2 + 4000);
+  if(!synth){
+    // natywnie: kolejne fragmenty po zakończeniu poprzedniego; nowe wywołanie przerywa stare
+    const tok = ++speakTok;
+    nativeTTS.stop().catch(()=>{}).then(async ()=>{
+      for(const p of parts){
+        if(tok!==speakTok) return;
+        try{ await nativeTTS.speak({text:p, lang:"pl-PL", rate:st.rate, pitch:1, volume:1, queueStrategy:0}); }catch(e){ break; }
+      }
+      if(tok===speakTok) done();
+    });
+    return;
+  }
+  synth.cancel();
   const v = voices.find(x=>x.name===st.voiceName);
   parts.forEach((p,i)=>{
     const u = new SpeechSynthesisUtterance(p);
@@ -526,7 +547,7 @@ function speak(text, cb){
   });
 }
 function estimate(text){ const w = text.split(/\s+/).length; return Math.max(2200, w*420/st.rate); }
-function silence(){ if(synth) synth.cancel(); clearTimeout(timer); }
+function silence(){ if(synth) synth.cancel(); if(nativeTTS){ speakTok++; nativeTTS.stop().catch(()=>{}); } clearTimeout(timer); }
 
 /* ===== Tryb automatyczny i ręczny ===== */
 function runStep(){
@@ -537,17 +558,17 @@ function runStep(){
     else { stopAuto(); toast("Amen. Modlitwa zakończona"); }
   };
   const text = speakable(steps[idx]);
-  if(st.voice && synth) speak(text, next); else timer = setTimeout(next, estimate(text));
+  if(st.voice && canSpeak) speak(text, next); else timer = setTimeout(next, estimate(text));
 }
 let wakeLock = null;
 async function startAuto(){
   if(idx===steps.length-1){ idx = 0; render(); }
   playing = true; setPlayIcon(); runStep();
-  try{ if("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); }catch(e){}
+  try{ if(keepAwake) await keepAwake.keepAwake(); else if("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); }catch(e){}
 }
 function stopAuto(){
   playing = false; runTok++; silence(); setPlayIcon();
-  try{ wakeLock && wakeLock.release(); }catch(e){} wakeLock = null;
+  try{ wakeLock && wakeLock.release(); if(keepAwake) keepAwake.allowSleep().catch(()=>{}); }catch(e){} wakeLock = null;
 }
 function setPlayIcon(){
   const b = $("bPlay");
@@ -619,10 +640,10 @@ const Music = {
 
 /* ===== Przełączniki ===== */
 function setVoice(on){
-  if(on && !synth){ toast("Ta przeglądarka nie ma syntezy mowy"); on = false; }
+  if(on && !canSpeak){ toast("Ta przeglądarka nie ma syntezy mowy"); on = false; }
   st.voice = on; store.set("voice", on);
   $("bVoice").setAttribute("aria-pressed", on); $("tVoice").checked = on;
-  if(!on){ if(synth) synth.cancel(); if(playing){ runTok++; runStep(); } }
+  if(!on){ silence(); if(playing){ runTok++; runStep(); } }
   else if(!playing) speak(speakable(steps[idx]));
   else { runTok++; silence(); runStep(); }
 }
@@ -755,11 +776,12 @@ drawPainting(); drawRosary();
 $("rRate").value = st.rate; $("rVol").value = st.vol;
 $("tVoice").checked = st.voice; $("bVoice").setAttribute("aria-pressed", st.voice);
 setCC(st.cc);
-if(synth){ loadVoices(); synth.onvoiceschanged = loadVoices; }
+if(synth){ loadVoices(); synth.onvoiceschanged = loadVoices; } else if(nativeTTS) loadVoices();
+if(isNative) $("bDownload").style.display = "none";   // w aplikacji natywnej przycisk pobierania jest zbędny
 $("ver").textContent = "Wersja " + APP_VERSION + ".";
 rebuild();
 
-if("serviceWorker" in navigator && location.protocol==="https:" && !/claude|anthropic/i.test(location.hostname)){
+if(!isNative && "serviceWorker" in navigator && location.protocol==="https:" && !/claude|anthropic/i.test(location.hostname)){
   navigator.serviceWorker.register("sw.js?v="+APP_VERSION).catch(()=>{});
 }
 </script>

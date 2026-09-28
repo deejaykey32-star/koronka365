@@ -10,6 +10,8 @@ Aplikacja modlitewna WEB + PWA (+ APK z PWABuilder): Koronka do Miłosierdzia Bo
 - Klucze localStorage z prefiksem `milosierdzie:`.
 - Przy każdej zmianie podbij `APP_VERSION` w `public/index.html` i `VERSION` w `public/sw.js`.
 - Nagłówki: `public/_headers`.
+- APK: `native/` (Capacitor, tylko w CI) buduje `public/download/milosierdzie.apk` z `public/`; w APK `window.Capacitor`
+  jest dostępny (`isNative`), lektor przez wtyczkę `TextToSpeech`, ekran przez `KeepAwake`. Nie commituj `native/android`, `native/www` ani APK.
 
 ## Wymagania, których nie wolno złamać
 - Obraz Jezusa Miłosiernego (`public/img/jezu-milosierny.webp`) zawsze widoczny w całości (SVG `meet`),

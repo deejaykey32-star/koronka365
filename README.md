@@ -17,9 +17,27 @@ Windows: uruchom w Git Bash lub WSL.
 - `wrangler.toml` – konfiguracja Pages
 - `.github/workflows/deploy.yml` – wdrożenie przy każdym pushu (gałęzie inne niż `main` dostają podgląd)
 
-## Obraz i APK
+## Obraz
 - `public/img/jezu-milosierny.webp` – obraz tła (482×1051). Przy wymianie obrazu popraw `CONFIG.bgSize` i `CONFIG.heart` w `index.html`
-- `public/download/milosierdzie.apk` – z pwabuilder.com (Android) po pierwszym wdrożeniu; limit pliku na Pages: 25 MB
+
+## Aplikacja natywna (APK) i PWA
+- **PWA**: `manifest.webmanifest` + `sw.js`; przycisk „Pobierz aplikację PWA” wywołuje instalację przeglądarki
+  (Android/komputer) albo pokazuje instrukcję dla iPhone’a.
+- **APK**: `native/` (Capacitor) opakowuje `public/` w aplikację Android działającą offline; lektor używa
+  natywnego syntezatora mowy Androida, ekran nie gaśnie w trybie automatycznym.
+  GitHub Actions buduje APK przy każdym wdrożeniu (`native/build-apk.sh`) i umieszcza je w
+  `public/download/milosierdzie.apk` – pod przyciskiem „Pobierz aplikację natywną (APK)”.
+  APK jest też dostępne jako artefakt uruchomienia w zakładce Actions.
+- **Klucz podpisu** (zalecane; bez niego APK jest podpisane kluczem tymczasowym i każda aktualizacja
+  wymaga odinstalowania poprzedniej wersji). Jednorazowo (JDK: `keytool`):
+  ```bash
+  keytool -genkeypair -v -keystore milosierdzie.keystore -alias milosierdzie -keyalg RSA -keysize 2048 -validity 10000
+  base64 -w0 milosierdzie.keystore > keystore.txt        # Windows: certutil -encode milosierdzie.keystore keystore.txt
+  ```
+  Sekrety repozytorium: `ANDROID_KEYSTORE_BASE64` (zawartość keystore.txt; przy certutil bez linii BEGIN/END),
+  `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`milosierdzie`), `ANDROID_KEY_PASSWORD`.
+  Plik `.keystore` przechowuj bezpiecznie i nie dodawaj do repozytorium.
+- Lokalnie (Node 22, JDK 21, Android SDK): `cd native && npm run apk`
 
 ## Każde wdrożenie
 Podbij `APP_VERSION` w `public/index.html` i `VERSION` w `public/sw.js`, potem:
