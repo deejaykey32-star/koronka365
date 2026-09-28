@@ -69,9 +69,9 @@ header{grid-area:head;display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px
 .layer{position:absolute;inset:0;width:100%;height:100%;display:block}
 #rosary{padding:2%}
 .ray{transition:opacity .9s;mix-blend-mode:screen}
-#rayLabels{pointer-events:none}
+#rayLabels{pointer-events:none;overflow:visible}
 .ray-label{transition:opacity .9s}
-.ray-label text{font-family:var(--sans);font-weight:700;font-size:30px;letter-spacing:.03em;paint-order:stroke;stroke:rgba(25,14,15,.85);stroke-width:6px;stroke-linejoin:round}
+.ray-label text{font-family:var(--sans);font-weight:700;letter-spacing:.02em;paint-order:stroke;stroke:rgba(25,14,15,.85);stroke-width:6px;stroke-linejoin:round}
 .bead{cursor:pointer;transition:fill .35s;stroke:rgba(25,14,15,.55);stroke-width:1}
 .bead-small{fill:url(#gPearl)}
 .bead-large,.bead-medal{fill:url(#gPearlL)}
@@ -248,7 +248,7 @@ header{grid-area:head;display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px
 <script>
 "use strict";
 /* ===== Konfiguracja ===== */
-const APP_VERSION = "1.4.0";
+const APP_VERSION = "1.5.0";
 const CONFIG = {
   bgUrl: "img/jezu-milosierny.webp",   // obraz Jezusa Miłosiernego (zawsze w całości)
   bgSize: [482, 1051],                 // wymiary obrazu w pikselach
@@ -287,15 +287,17 @@ const SAC = [
   {n:"Chrzest", c:"white"}, {n:"Bierzmowanie", c:"white"}, {n:"Eucharystia", c:"white"},
   {n:"Małżeństwo i Kapłaństwo", c:"red"}, {n:"Spowiedź i Namaszczenie chorych", c:"red"}
 ];
-// promienie z Serca: kąt w stopniach (zgodnie z obrazem: czerwone w lewo w dół, blade w dół i w prawo),
-// napis sakramentu i odległość jego środka od Serca (px obrazu)
+// promienie z Serca: kąt w stopniach (zgodnie z obrazem: czerwone w lewo w dół, blade w dół i w prawo);
+// napisy sakramentów leżą na promieniach i zaczynają się y0 px (obrazu) poniżej Serca, wielkość f px.
+// Białe (i Spowiedź, której promień szybko wychodzi z obrazu) od jednej wysokości; Małżeństwo niżej,
+// gdzie promienie są dalej od siebie
 const RAY_ANGLE = [7, -4, -15, 18, 28];
-const RAY_LABEL = [
-  {lines:["Chrzest"], d:250},
-  {lines:["Bierzmowanie"], d:470},
-  {lines:["Eucharystia"], d:260},
-  {lines:["Małżeństwo", "i Kapłaństwo"], d:590},
-  {lines:["Spowiedź i", "Namaszczenie chorych"], d:265}
+const RAY_TEXT = [
+  {lines:["Chrzest"], y0:275, f:42},
+  {lines:["Bierzmowanie"], y0:275, f:42},
+  {lines:["Eucharystia"], y0:275, f:42},
+  {lines:["Małżeństwo i", "Kapłaństwo"], y0:505, f:32},
+  {lines:["Spowiedź i", "Namaszczenie", "chorych"], y0:275, f:34}
 ];
 const DAY_PART = ["chwalebne","radosne","bolesne","chwalebne","swiatla","bolesne","radosne"];
 
@@ -414,15 +416,12 @@ function drawPainting(){
     const grad = sac.c==="white" ? "gRayW" : "gRayR";
     el("path", {d:`M-4 0 L4 0 L48 ${L} L-48 ${L} Z`, fill:`url(#${grad})`, filter:"url(#fSoft)"}, g);
     el("path", {d:`M-2 0 L2 0 L18 ${L*.75} L-18 ${L*.75} Z`, fill:`url(#${grad})`}, g);
-    // napis na osi promienia, czytany od lewej do prawej; sąsiednie promienie mają napisy
-    // na przemian bliżej i dalej od Serca, żeby się nie nakładały
+    // napis na osi promienia, czytany od lewej do prawej
     const lg = el("g", {class:"ray-label", id:"rayT"+i, transform:tr, opacity:0}, labels);
-    const flip = RAY_ANGLE[i] > 0, lines = RAY_LABEL[i].lines, n = lines.length;
-    const t = el("text", {transform:`rotate(${flip ? -90 : 90})`, "text-anchor":"middle", "dominant-baseline":"central",
-      fill:sac.c==="white" ? "#ffffff" : "#ffe1e1"}, lg);
-    lines.forEach((line,k)=>{
-      el("tspan", {x:(flip ? -1 : 1)*RAY_LABEL[i].d, y:(k-(n-1)/2)*34}, t).textContent = line;
-    });
+    const flip = RAY_ANGLE[i] > 0, R = RAY_TEXT[i], n = R.lines.length, d = R.y0 / Math.cos(RAY_ANGLE[i]*Math.PI/180);
+    const t = el("text", {transform:`rotate(${flip ? -90 : 90})`, "text-anchor":flip ? "end" : "start", "dominant-baseline":"central",
+      "font-size":R.f, fill:sac.c==="white" ? "#ffffff" : "#ffe1e1"}, lg);
+    R.lines.forEach((line,k)=>{ el("tspan", {x:(flip ? -1 : 1)*d, y:(k-(n-1)/2)*1.05*R.f}, t).textContent = line; });
   });
 }
 

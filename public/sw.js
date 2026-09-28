@@ -1,5 +1,5 @@
 // Podbij wersję przy każdym wdrożeniu, aby odświeżyć cache
-const VERSION = "milosierdzie-v1.4.0";
+const VERSION = "milosierdzie-v1.5.0";
 const CORE = ["./", "index.html", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png", "img/jezu-milosierny.webp"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
