@@ -1,0 +1,38 @@
+{
+  "name": "Jezu, ufam Tobie – Koronka i Różaniec",
+  "short_name": "Ufam Tobie",
+  "id": "/",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1f1718",
+  "theme_color": "#1f1718",
+  "lang": "pl",
+  "description": "Koronka do Miłosierdzia Bożego i Różaniec na tle obrazu Jezusa Miłosiernego.",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
