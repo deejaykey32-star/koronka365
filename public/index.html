@@ -69,6 +69,8 @@ header{grid-area:head;display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px
 .layer{position:absolute;inset:0;width:100%;height:100%;display:block}
 #rosary{padding:2%}
 .ray{transition:opacity .9s;mix-blend-mode:screen}
+.ray-label{transition:opacity .9s;pointer-events:none}
+.ray-label text{font-family:var(--sans);font-weight:700;font-size:20px;letter-spacing:.04em;paint-order:stroke;stroke:rgba(25,14,15,.8);stroke-width:4px;stroke-linejoin:round}
 .bead{cursor:pointer;transition:fill .35s;stroke:rgba(25,14,15,.55);stroke-width:1}
 .bead-small{fill:url(#gPearl)}
 .bead-large,.bead-medal{fill:url(#gPearlL)}
@@ -178,7 +180,7 @@ header{grid-area:head;display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px
   <header>
     <div class="brand">Jezu, ufam Tobie</div>
     <div class="seg" role="group" aria-label="Rodzaj modlitwy">
-      <button id="mKoronka" aria-pressed="true" data-tip="Koronka do Miłosierdzia Bożego: 5 dziesiątków, na koniec 3 razy „Święty Boże”">Koronka</button>
+      <button id="mKoronka" aria-pressed="true" data-tip="Koronka do Miłosierdzia Bożego: 5 dziesiątków, na koniec po 3 razy „Święty Boże”, „O Krwi i Wodo” i „Jezu, ufam Tobie”">Koronka</button>
       <button id="mRoza" aria-pressed="false" data-tip="Różaniec: wybierz część tajemnic">Różaniec</button>
     </div>
     <button class="icon-btn" id="bDownload" data-tip="Pobierz aplikację: APK na Androida albo instalacja PWA" aria-label="Pobierz aplikację"><svg><use href="#i-dl"/></svg></button>
@@ -244,7 +246,7 @@ header{grid-area:head;display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px
 <script>
 "use strict";
 /* ===== Konfiguracja ===== */
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.2.0";
 const CONFIG = {
   bgUrl: "img/jezu-milosierny.webp",   // obraz Jezusa Miłosiernego (zawsze w całości)
   bgSize: [482, 1051],                 // wymiary obrazu w pikselach
@@ -303,7 +305,19 @@ function atLen(d){ let lo=0, hi=cum.length-1; while(hi-lo>1){ const m=(lo+hi)>>1
 const BEADS = {};
 const notch = dense[0];                          // górne zwężenie serca
 BEADS.m = {x:notch[0], y:notch[1], type:"medal"};
-for(let k=1;k<=54;k++){ const p = atLen(TOTAL*k/55); BEADS["r"+k] = {x:p[0], y:p[1], type:(k%11===0)?"large":"small"}; }
+// 27 paciorków na lewej połowie, prawa to lustro; żaden nie stoi na ostrym czubku ani przy medaliku,
+// więc paciorki 27 i 28 (dół serca) oraz 1 i 54 (przy medaliku) leżą obok siebie, nie na sobie
+{
+  const AXIS = 5.8 + 4, lenOk = i => CX - dense[i][0] >= AXIS;
+  let a0 = 0, a1 = 0;
+  for(let i=1;i<dense.length;i++) if(lenOk(i) && Math.hypot(dense[i][0]-notch[0], dense[i][1]-notch[1]) >= 10+5.8+4){ a0 = cum[i]; break; }
+  for(let i=0;i<dense.length && cum[i]<=TOTAL/2;i++) if(lenOk(i)) a1 = cum[i];
+  for(let k=1;k<=27;k++){
+    const p = atLen(a0 + (a1-a0)*(k-1)/26);
+    BEADS["r"+k] = {x:p[0], y:p[1], type:(k%11===0)?"large":"small"};
+    BEADS["r"+(55-k)] = {x:2*CX-p[0], y:p[1], type:((55-k)%11===0)?"large":"small"};
+  }
+}
 const CHAIN = ["cL1","c3","c2","c1","cL0","cross"], GAP = 32;
 CHAIN.forEach((id,i)=>{ BEADS[id] = {x:notch[0], y:notch[1] + GAP*(i+1) + (id==="cross"?4:0), type: id==="cross"?"cross":(id.startsWith("cL")?"large":"small")}; });
 const ofBead = d => d===0 ? "cL1" : "r"+(d*11);
@@ -321,8 +335,9 @@ function buildKoronka(){
     s.push({b:ofBead(d), t:`Dziesiątek ${ORD_D[d]}`, x:P.przedwieczny, d, n:0});
     for(let j=0;j<10;j++) s.push({b:smallBead(d,j), t:`Dziesiątek ${ORD_D[d]}`, x:P.dlaJego, d, n:j+1});
   }
-  for(let i=1;i<=3;i++) s.push({b:"m", t:`Na zakończenie (${i} z 3)`, x:P.swiety, d:5});
-  s.push({b:"m", t:"Zakończenie", x:P.ufam, d:5});
+  for(let i=1;i<=3;i++) s.push({b:"m", t:`Na zakończenie: Święty Boże (${i} z 3)`, x:P.swiety, d:5});
+  for(let i=1;i<=3;i++) s.push({b:"m", t:`Na zakończenie: O Krwi i Wodo (${i} z 3)`, x:P.okrwi, d:5});
+  for(let i=1;i<=3;i++) s.push({b:"m", t:`Na zakończenie: Jezu, ufam Tobie (${i} z 3)`, x:P.ufam, d:5});
   return s;
 }
 function buildRozaniec(part){
@@ -378,14 +393,24 @@ function drawPainting(){
   </defs>
   <image href="${CONFIG.bgUrl}" x="0" y="0" width="${W}" height="${H}"/>
   <g id="rays"></g>
-  <circle id="core" cx="${hx}" cy="${hy}" r="34" fill="url(#gCore)" opacity="0" class="ray"/>`;
+  <circle id="core" cx="${hx}" cy="${hy}" r="34" fill="url(#gCore)" opacity="0" class="ray"/>
+  <g id="rayLabels"></g>`;
   // kąty zgodne z obrazem: czerwone w lewo w dół, blade w dół i w prawo
-  const angles = [7, -4, -15, 18, 28], L = 820, rays = svg.querySelector("#rays");
+  const angles = [7, -4, -15, 18, 28], L = 820, rays = svg.querySelector("#rays"), labels = svg.querySelector("#rayLabels");
   SAC.forEach((sac,i)=>{
-    const g = el("g", {class:"ray", id:"ray"+i, transform:`translate(${hx} ${hy}) rotate(${angles[i]})`, opacity:0}, rays);
+    const tr = `translate(${hx} ${hy}) rotate(${angles[i]})`;
+    const g = el("g", {class:"ray", id:"ray"+i, transform:tr, opacity:0}, rays);
     const grad = sac.c==="white" ? "gRayW" : "gRayR";
     el("path", {d:`M-4 0 L4 0 L48 ${L} L-48 ${L} Z`, fill:`url(#${grad})`, filter:"url(#fSoft)"}, g);
     el("path", {d:`M-2 0 L2 0 L18 ${L*.75} L-18 ${L*.75} Z`, fill:`url(#${grad})`}, g);
+    // napis wzdłuż promienia (poza mieszaniem "screen", żeby był czytelny); zawsze czytany od lewej do prawej
+    const lg = el("g", {class:"ray-label", id:"rayT"+i, transform:tr, opacity:0}, labels);
+    // "Chrzest" biegnie wzdłuż łańcuszka, więc jego napis odsunięty w lewo od paciorków
+    const flip = angles[i] > 0, START = i===0 ? 190 : 150, SIDE = i===0 ? -20 : 0;
+    const t = el("text", {transform:`rotate(${flip ? -90 : 90})`, x:flip ? -START : START, y:SIDE,
+      "text-anchor":flip ? "end" : "start", "dominant-baseline":"central",
+      fill:sac.c==="white" ? "#ffffff" : "#ffe1e1"}, lg);
+    t.textContent = sac.n;
   });
 }
 
@@ -444,7 +469,12 @@ function render(){
   const b = BEADS[s.b], pulse = $("pulse");
   pulse.setAttribute("cx", b.x); pulse.setAttribute("cy", b.type==="cross" ? b.y+2 : b.y);
   pulse.classList.add("on");
-  for(let i=0;i<5;i++) $("ray"+i).setAttribute("opacity", s.d===5 ? .6 : s.d===i ? 1 : (s.d>i ? .35 : 0));
+  // promienie przybywają z każdym dziesiątkiem i zostają do końca modlitwy
+  for(let i=0;i<5;i++){
+    const on = s.d>=i;
+    $("ray"+i).setAttribute("opacity", on ? (s.d===i ? 1 : .85) : 0);
+    $("rayT"+i).setAttribute("opacity", on ? 1 : 0);
+  }
   $("core").setAttribute("opacity", s.d>=0 ? .9 : 0);
   $("capTitle").textContent = s.t;
   $("capText").textContent = s.x;
